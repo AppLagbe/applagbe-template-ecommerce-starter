@@ -1,0 +1,268 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ==========================================
+// 1. BRANDING & THEME CONFIGURATION
+// ==========================================
+model SiteSetting {
+  id              String   @id @default("default")
+  storeName       String   @default("App Lagbe Store")
+  storeTagline    String   @default("Premium Quality Delivered Across Bangladesh")
+  logoUrl         String   @default("")
+  faviconUrl      String   @default("")
+  primaryColor    String   @default("#059669") // emerald-600
+  accentColor     String   @default("#ea580c") // orange-600
+  backgroundColor String   @default("#f8fafc")
+  fontFamily      String   @default("Inter")
+  borderRadius    String   @default("0.75rem")
+  
+  // Contact details
+  supportPhone    String   @default("01700000000")
+  whatsappNumber  String   @default("8801700000000")
+  supportEmail    String   @default("support@applagbe.com")
+  officeAddress   String   @default("Dhaka, Bangladesh")
+  
+  // Currency & Localization
+  currencyCode    String   @default("BDT")
+  currencySymbol  String   @default("৳")
+  defaultLanguage String   @default("bn") // 'bn' or 'en'
+  announcementBar String   @default("সারাদেশে ক্যাশ অন ডেলিভারি সুবিধা! হোম ডেলিভারি ৩-৫ কর্মদিবস")
+  isAnnouncementActive Boolean @default(true)
+  
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+}
+
+// ==========================================
+// 2. PRODUCT & CATALOG
+// ==========================================
+model Product {
+  id             String           @id @default(cuid())
+  slug           String           @unique
+  name           String
+  subtitle       String?
+  description    String
+  basePrice      Float            // Standard single item price
+  comparePrice   Float?           // Original crossed out price (e.g. 1850 crossed out to 1350)
+  isFeatured     Boolean          @default(true)
+  isActive       Boolean          @default(true)
+  sku            String?          @unique
+  stockQuantity  Int              @default(100)
+  lowStockAlert  Int              @default(5)
+  
+  images         ProductImage[]
+  variants       ProductVariant[]
+  bundles        BundleOffer[]
+  orderItems     OrderItem[]
+
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+}
+
+model ProductImage {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  altText   String?
+  sortOrder Int      @default(0)
+  isPrimary Boolean  @default(false)
+}
+
+model ProductVariant {
+  id            String      @id @default(cuid())
+  productId     String
+  product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  title         String      // e.g. "Black - M" or "500ml"
+  sku           String?
+  price         Float       // Variant price override if any
+  stockQuantity Int         @default(50)
+  attributes    String      // JSON string e.g. {"Color": "Black", "Size": "XL"}
+  orderItems    OrderItem[]
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model BundleOffer {
+  id              String      @id @default(cuid())
+  productId       String
+  product         Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  badge           String      // e.g. "Most Popular", "Best Value", "Buy 1"
+  title           String      // e.g. "১টি কিনুন" / "২টি কিনুন (১০% ছাড়)"
+  description     String?
+  itemQuantity    Int         @default(1) // Number of product items in this bundle
+  bundlePrice     Float       // Total fixed bundle price
+  regularPrice    Float?      // Strike-through regular price
+  freeDelivery    Boolean     @default(false)
+  isDefault       Boolean     @default(false)
+  sortOrder       Int         @default(0)
+  orderItems      OrderItem[]
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+// ==========================================
+// 3. DELIVERY RATES & ZONES
+// ==========================================
+model DeliveryZone {
+  id            String   @id @default(cuid())
+  name          String   // e.g. "Inside Dhaka", "Outside Dhaka", "Sub-Dhaka"
+  code          String   @unique // "inside_dhaka", "outside_dhaka"
+  charge        Float    // 70.0, 130.0
+  estimatedDays String   // "24-48 hours", "3-5 days"
+  districts     String?  // Optional comma-separated list of districts if granular
+  isActive      Boolean  @default(true)
+  sortOrder     Int      @default(0)
+}
+
+// ==========================================
+// 4. ORDERS, SHIPMENTS & PAYMENTS
+// ==========================================
+model Order {
+  id              String               @id @default(cuid())
+  orderNumber     String               @unique // e.g. "AL-20261021-1001"
+  customerName    String
+  customerPhone   String
+  customerEmail   String?
+  notes           String?
+  
+  // Pricing breakdown (Calculated strictly server-side)
+  subtotal        Float
+  deliveryCharge  Float
+  discountAmount  Float                @default(0)
+  totalAmount     Float                // subtotal + deliveryCharge - discountAmount
+  
+  // Status separation
+  orderStatus     String               @default("PENDING") // PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED, RETURNED
+  paymentStatus   String               @default("PENDING_COD") // PENDING_COD, ADVANCE_PAID, PAID, FAILED, REFUNDED
+  paymentMethod   String               @default("COD") // COD, BKASH, NAGAD, ROCKET
+  
+  items           OrderItem[]
+  deliveryDetail  DeliveryDetail?
+  payments        PaymentTransaction[]
+  statusHistory   OrderStatusHistory[]
+
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+}
+
+model OrderItem {
+  id              String          @id @default(cuid())
+  orderId         String
+  order           Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product         @relation(fields: [productId], references: [id])
+  variantId       String?
+  variant         ProductVariant? @relation(fields: [variantId], references: [id])
+  bundleId        String?
+  bundle          BundleOffer?    @relation(fields: [bundleId], references: [id])
+  
+  productName     String          // Historical snapshot at checkout
+  variantTitle    String?
+  bundleBadge     String?
+  unitPrice       Float
+  quantity        Int
+  subtotal        Float
+}
+
+model DeliveryDetail {
+  id              String   @id @default(cuid())
+  orderId         String   @unique
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  recipientName   String
+  recipientPhone  String
+  district        String   // e.g. "Dhaka", "Chattogram", "Sylhet"
+  thana           String?
+  fullAddress     String   // Road, House, Area
+  zoneCode        String   // "inside_dhaka" | "outside_dhaka"
+  trackingCode    String?  // Courier tracking id (Steadfast, RedX, Pathao)
+  courierName     String?  // "Steadfast" | "Pathao" | "Paperfly" | "Internal"
+  deliveryNotes   String?
+  
+  shippedAt       DateTime?
+  deliveredAt     DateTime?
+}
+
+model PaymentTransaction {
+  id             String    @id @default(cuid())
+  orderId        String
+  order          Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider       String    // "COD", "BKASH", "NAGAD", "MANUAL"
+  transactionRef String?   // TrxID from bKash or Nagad
+  amount         Float
+  status         String    // "SUCCESS", "PENDING", "FAILED"
+  payload        String?   // JSON response from gateway
+  createdAt      DateTime  @default(now())
+}
+
+model OrderStatusHistory {
+  id         String   @id @default(cuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromStatus String?
+  toStatus   String
+  note       String?
+  changedBy  String   @default("System")
+  createdAt  DateTime @default(now())
+}
+
+// ==========================================
+// 5. LANDING PAGE SECTIONS & DRAFT/PUBLISH
+// ==========================================
+model PageLayout {
+  id          String          @id @default("landing-home")
+  title       String          @default("Single Product Landing")
+  slug        String          @default("home")
+  isPublished Boolean         @default(true)
+  sections    SectionConfig[]
+  updatedAt   DateTime        @updatedAt
+}
+
+model SectionConfig {
+  id          String     @id @default(cuid())
+  pageId      String     @default("landing-home")
+  page        PageLayout @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  sectionKey  String     // "hero", "gallery", "benefits", "steps", "bundles", "reviews", "faq", "checkout"
+  title       String?    // e.g. "কেন আমাদের পণ্যটি ব্যবহার করবেন?"
+  isEnabled   Boolean    @default(true)
+  sortOrder   Int        @default(0)
+  
+  // Draft vs Published content JSON
+  publishedContent String @default("{}") // Live JSON props
+  draftContent     String @default("{}") // Edited but unreleased JSON props
+  hasUnpublishedChanges Boolean @default(false)
+  
+  updatedAt   DateTime   @updatedAt
+}
+
+// ==========================================
+// 6. ADMIN SECURITY & USER AUTH
+// ==========================================
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         String   @default("ADMIN") // SUPERADMIN, ADMIN, MANAGER
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ==========================================
+// 7. DUPLICATE ORDER PREVENTION & IDEMPOTENCY
+// ==========================================
+model IdempotencyRecord {
+  id          String   @id @default(cuid())
+  keyHash     String   @unique // Hash of phone + productId + time window
+  orderId     String
+  createdAt   DateTime @default(now())
+}

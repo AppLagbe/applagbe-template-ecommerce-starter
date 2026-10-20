@@ -1,0 +1,24 @@
+@import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --brand-primary: #059669;
+    --brand-primary-hover: #047857;
+    --brand-accent: #ea580c;
+    --brand-accent-hover: #c2410c;
+    --brand-bg: #f8fafc;
+    --brand-radius: 0.75rem;
+    --font-brand: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  body {
+    background-color: var(--brand-bg);
+    color: #0f172a;
+    font-family: var(--font-brand);
+    -webkit-font-smoothing: antialiased;
+  }
+}
